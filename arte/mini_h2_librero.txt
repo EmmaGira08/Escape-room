@@ -1,0 +1,5 @@
+ +----------+
+ |RRR B AAAAA|
+ |RRR B AAAAA|
+ +----------+
+ |  [cajon] |
