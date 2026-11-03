@@ -1,0 +1,7 @@
+simbolo,nombre,archivo,detalle
+R,el perchero y el saco,h2_perchero,Un saco viejo cuelga del perchero junto a la silla. En el bolsillo encuentras una nota: Cuenta cuantos libros hay en la repisa. Primero los ROJOS luego el AZUL y al final los AMARILLOS. Esas tres cifras juntas abren el baul.
+C,el librero,h2_librero,Una repisa llena de libros de colores: 3 libros ROJOS - 1 libro AZUL - 5 libros AMARILLOS. Abajo hay un cajon secreto con una cerradura dorada.
+F,el baul del rincon,h2_baul,Un baul de madera con un candado de 3 digitos. Hay que ingresar el codigo correcto.
+N,el cuadro misterioso,h2_cuadro,Un cuadro viejo de una noche sin luna. A simple vista no se distingue nada. Hay manchas extranas en el lienzo. Quizas haga falta otra clase de luz.
+A,la caja mecanica,h2_caja,Una caja mecanica con un dial de figuras de animales: GATO - PEZ - BUHO - RANA - ZORRO. Si el dial se gira a la figura correcta la caja se abre.
+P,la puerta de salida,h2_puerta,Una puerta metalica con un teclado numerico de 4 digitos. Es la unica salida. Espera una clave.
