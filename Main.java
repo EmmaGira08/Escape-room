@@ -1,4 +1,5 @@
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Scanner;
@@ -56,7 +57,16 @@ public class Main {
     public static int habitacionActual = 1;
 
     /** Cuantas habitaciones tiene el juego: la victoria esta tras la ultima. */
-    public static final int TOTAL_HABITACIONES = 3;
+    public static final int TOTAL_HABITACIONES = 2; // subir a medida que se agreguen habitaciones
+
+    /** El codigo de 3 digitos del baul de la habitacion 2 (libros: 3 rojos, 1 azul, 5 amarillos). */
+    public static final String CODIGO_BAUL_2 = "315";
+
+    /** La clave fija de la puerta de la habitacion 2 (esta en la nota secreta del librero). */
+    public static final String CLAVE_HABITACION_2 = "8420";
+
+    /** Habitacion 2: true cuando el jugador ya vio el BUHO en el cuadro con luz UV. */
+    public static boolean buhoDescubierto = false;
 
     /** El nombre del jugador; lo pide configurarJugador() (PLACEHOLDER 2). */
     public static String nombreJugador = "aventurero";
@@ -131,7 +141,7 @@ public class Main {
         if (!cargarMundo(1)) {
             return; // sin datos no hay juego
         }
-        Sonido.musicaFondo("musica/ambiente.mid");
+        iniciarMusicaHabitacion(habitacionActual);
 
         boolean escapo = false;
         boolean jugando = true;
@@ -239,20 +249,47 @@ public class Main {
      *         nueva habitacion.
      */
     public static boolean siguienteHabitacion() {
-        // TODO equipo: habitacionActual++, cargarMundo(...), transicion y return false.
+        int anterior = habitacionActual;
+        habitacionActual++;
+        if (!cargarMundo(habitacionActual)) {
+            System.out.println(" No se pudieron cargar los archivos de la habitacion "
+                    + habitacionActual + ". Fin del juego.");
+            return true; // sin datos no hay juego
+        }
+        limpiarPantalla();
         System.out.println();
         System.out.println(bordeEscena());
         System.out.println();
-        System.out.println(centrar("Escapaste de la habitacion " + habitacionActual + "...", ANCHO_ESCENA));
-        System.out.println(centrar("pero la puerta da a un pasillo EN CONSTRUCCION.", ANCHO_ESCENA));
+        System.out.println(centrar("Escapaste de la habitacion " + anterior + "...", ANCHO_ESCENA));
+        System.out.println(centrar("La puerta se cierra a tus espaldas con un golpe seco.", ANCHO_ESCENA));
         System.out.println();
-        System.out.println(centrar("Equipo: las habitaciones " + (habitacionActual + 1)
-                + " y " + TOTAL_HABITACIONES + " son SU mision.", ANCHO_ESCENA));
+        System.out.println(centrar("HABITACION " + habitacionActual, ANCHO_ESCENA));
+        System.out.println(centrar("Tu inventario sigue contigo.", ANCHO_ESCENA));
         System.out.println();
         System.out.println(bordeEscena());
-        System.out.print(centrar("[ ENTER para salir ]", ANCHO_ESCENA));
+        System.out.print(centrar("[ ENTER para entrar ]", ANCHO_ESCENA));
         lector.nextLine();
-        return true; // provisional: el juego termina en la habitacion 1
+        mensaje = "Entras a la habitacion " + habitacionActual + ". Explora.";
+        iniciarMusicaHabitacion(habitacionActual);
+        return false; // el ciclo sigue jugando en la nueva habitacion
+    }
+
+    /**
+     * Pone la musica de fondo de una habitacion: la 1 usa musica/ambiente.mid
+     * y las demas musica/ambienteN.mid (la 2 usa ambiente2.mid). Si el archivo
+     * de esa habitacion no existe, se queda con la musica que ya suena.
+     *
+     * @param numero el numero de la habitacion a la que entra el jugador.
+     */
+    public static void iniciarMusicaHabitacion(int numero) {
+        String ruta = (numero == 1) ? "musica/ambiente.mid" : "musica/ambiente" + numero + ".mid";
+        if (!new File(ruta).exists()) {
+            if (Sonido.secuenciador != null) {
+                return; // sin cancion propia: sigue sonando la anterior
+            }
+            ruta = "musica/ambiente.mid";
+        }
+        Sonido.musicaFondo(ruta);
     }
 
     /**
@@ -311,6 +348,12 @@ public class Main {
         // La operacion de esta habitacion y su clave.
         operacionElegida = (int) (Math.random() * operaciones.length);
         clave = calcularClave(operacionElegida, numeroCofre);
+
+        // La habitacion 2 tiene su propio puzzle: la clave es fija (8420).
+        buhoDescubierto = false;
+        if (numero == 2) {
+            clave = CLAVE_HABITACION_2;
+        }
         return true;
     }
 
@@ -351,6 +394,7 @@ public class Main {
      * @param panel las lineas del panel derecho (estado o preview).
      */
     public static void dibujarPantalla(String[] panel) {
+        limpiarPantalla(); // la habitacion se redibuja en el mismo lugar, sin apilar cuadros
         System.out.println();
         System.out.println(" +============ ESCAPE: LA HABITACION ============+");
         System.out.println();
@@ -362,6 +406,32 @@ public class Main {
         }
         System.out.println();
         System.out.println(" " + mensaje);
+    }
+
+    /** Si es false, el juego no borra la consola (util para depurar con todo el historial). */
+    public static boolean limpiarConsola = true;
+
+    /**
+     * Borra la consola y deja el cursor arriba, para que cada pantalla
+     * REEMPLACE a la anterior en vez de apilarse debajo. En Windows usa
+     * "cls"; en Linux, Mac y la terminal de VS Code usa el codigo ANSI.
+     * Si la consola no soporta ninguno, el juego sigue igual (solo se apila).
+     */
+    public static void limpiarPantalla() {
+        if (!limpiarConsola) {
+            return;
+        }
+        try {
+            String sistema = System.getProperty("os.name").toLowerCase();
+            if (sistema.contains("win")) {
+                new ProcessBuilder("cmd", "/c", "cls").inheritIO().start().waitFor();
+            } else {
+                System.out.print("\033[H\033[2J");
+                System.out.flush();
+            }
+        } catch (Exception e) {
+            // sin limpieza: la pantalla simplemente se imprime debajo
+        }
     }
 
     /** Una fila de la matriz visual como texto, con el jugador (@) encima. */
@@ -489,8 +559,12 @@ public class Main {
         }
 
         // COMPORTAMIENTOS ESPECIALES por objeto van aqui.
-        // TODO equipo: agreguen los else-if de SUS objetos especiales
-        //              (en las habitaciones 2 y 3 necesitaran varios).
+        // Cada habitacion tiene sus propios simbolos: se despacha por habitacion
+        // para que una 'C' de la habitacion 2 no se comporte como el cofre de la 1.
+        if (habitacionActual == 2) {
+            return objetoHabitacion2(simbolo, objeto);
+        }
+        // TODO equipo: habitacion 3 -> if (habitacionActual == 3) { ... }
 
         // La alfombra entrega la llave al inventario la primera vez.
         if (simbolo == 'A') {
@@ -541,6 +615,180 @@ public class Main {
         recordarMirado(simbolo);
         mensaje = "Miraste " + objeto[1] + ". Sigues frente al objeto.";
         return false;
+    }
+
+    /* ==================== HABITACION 2: EL ESTUDIO ==================== */
+
+    /**
+     * Los comportamientos de la habitacion 2. Cadena del puzzle:
+     * perchero (nota: contar libros) -> librero (3 rojos, 1 azul, 5 amarillos)
+     * -> baul (315) -> linterna UV -> cuadro (BUHO) -> caja del buho -> llave
+     * dorada -> cajon del librero -> nota secreta (8420) -> puerta.
+     *
+     * @param simbolo la letra del objeto (R, C, F, N, A o P).
+     * @param objeto  la fila del objetos2.csv de ese objeto.
+     * @return true si el juego termina (la puerta de la ultima habitacion).
+     */
+    public static boolean objetoHabitacion2(char simbolo, String[] objeto) {
+        if (simbolo == 'P') {
+            return abrirPuerta(objeto);
+        }
+
+        // El perchero: la pista inicial (la nota del bolsillo del saco).
+        if (simbolo == 'R') {
+            abrirEscena(objeto);
+            recordarMirado(simbolo);
+            mensaje = "La nota del saco te manda a contar los libros de la repisa.";
+            return false;
+        }
+
+        // El baul: pide el codigo de 3 digitos y entrega la linterna UV.
+        if (simbolo == 'F') {
+            return abrirBaul(objeto);
+        }
+
+        // El cuadro: con la linterna UV revela el BUHO.
+        if (simbolo == 'N') {
+            recordarMirado(simbolo);
+            if (tieneObjeto("linterna UV")) {
+                Sonido.exito();
+                buhoDescubierto = true;
+                mostrarEscena("el cuadro bajo la luz UV", "h2_cuadro_uv",
+                        "Enciendes la linterna UV y el lienzo brilla: aparece el dibujo fluorescente de un BUHO.");
+                esperarEnter();
+                mensaje = "El cuadro escondia un BUHO.";
+            } else {
+                abrirEscena(objeto);
+                mensaje = "Hay algo en el cuadro, pero no logras verlo. Necesitas otra luz.";
+            }
+            return false;
+        }
+
+        // La caja mecanica: el dial se gira a la figura del buho y da la llave dorada.
+        if (simbolo == 'A') {
+            return abrirCajaBuho(objeto);
+        }
+
+        // El librero: el conteo de libros y, con la llave dorada, el cajon secreto.
+        if (simbolo == 'C') {
+            recordarMirado(simbolo);
+            if (tieneObjeto("llave dorada")) {
+                Sonido.exito();
+                mostrarEscena("el cajon abierto", "h2_librero_abierto",
+                        "La llave dorada gira. CLIC. Dentro del cajon hay una nota secreta con un codigo grabado: "
+                        + CLAVE_HABITACION_2 + ".");
+                esperarEnter();
+                guardarObjeto("nota secreta");
+                mensaje = "Guardaste la NOTA SECRETA: el codigo es " + CLAVE_HABITACION_2 + ".";
+            } else {
+                abrirEscena(objeto);
+                Sonido.error();
+                mensaje = "El cajon secreto del librero tiene cerradura dorada. Esta cerrado.";
+            }
+            return false;
+        }
+
+        abrirEscena(objeto);
+        recordarMirado(simbolo);
+        mensaje = "Miraste " + objeto[1] + ". Sigues frente al objeto.";
+        return false;
+    }
+
+    /**
+     * El baul del rincon: candado de 3 digitos (315). Al abrirlo entrega la
+     * linterna UV; si ya estaba abierto, solo se muestra vacio.
+     */
+    public static boolean abrirBaul(String[] objeto) {
+        recordarMirado('F');
+        if (tieneObjeto("linterna UV")) {
+            mostrarEscena("el baul abierto", "h2_baul_abierto", "El baul ya esta abierto y vacio.");
+            esperarEnter();
+            mensaje = "El baul ya no guarda nada mas.";
+            return false;
+        }
+        mostrarEscena(objeto[1], objeto[2], objeto[3]);
+        String intento = leerTexto(centrar("Codigo (solo ENTER para alejarte): ", ANCHO_ESCENA));
+        System.out.println(bordeEscena());
+        if (intento.equals(CODIGO_BAUL_2)) {
+            Sonido.exito();
+            guardarObjeto("linterna UV");
+            mostrarEscena("el baul abierto", "h2_baul_abierto",
+                    "CLIC. El candado cede. Dentro hay una LINTERNA DE LUZ UV. La guardas en tu inventario.");
+            esperarEnter();
+            Sonido.recoger();
+            mensaje = "Guardaste la LINTERNA UV en tu inventario.";
+        } else if (intento.isEmpty()) {
+            mensaje = "Te alejas del baul sin intentar nada.";
+        } else {
+            Sonido.error();
+            mensaje = "CODIGO INCORRECTO. El candado no se mueve.";
+        }
+        return false;
+    }
+
+    /**
+     * La caja mecanica del buho: un dial de animales. Solo la figura del
+     * BUHO la abre y entrega la llave dorada.
+     */
+    public static boolean abrirCajaBuho(String[] objeto) {
+        recordarMirado('A');
+        if (tieneObjeto("llave dorada")) {
+            mostrarEscena("la caja abierta", "h2_caja_abierta", "La caja ya esta abierta y vacia.");
+            esperarEnter();
+            mensaje = "La caja ya no guarda nada mas.";
+            return false;
+        }
+        mostrarEscena(objeto[1], objeto[2], objeto[3]);
+        String animal = leerTexto(centrar("Girar el dial a (solo ENTER para alejarte): ", ANCHO_ESCENA)).toLowerCase();
+        System.out.println(bordeEscena());
+        if (animal.equals("buho") || animal.equals("búho")) {
+            Sonido.exito();
+            guardarObjeto("llave dorada");
+            mostrarEscena("la caja abierta", "h2_caja_abierta",
+                    "El dial se alinea con el BUHO. CLIC. Dentro brilla una LLAVE DORADA. La guardas en tu inventario.");
+            esperarEnter();
+            Sonido.recoger();
+            mensaje = "Guardaste la LLAVE DORADA en tu inventario.";
+        } else if (animal.isEmpty()) {
+            mensaje = "Te alejas de la caja sin tocar el dial.";
+        } else if (animal.equals("gato") || animal.equals("pez")
+                || animal.equals("rana") || animal.equals("zorro")) {
+            Sonido.error();
+            mensaje = "El dial gira a " + animal.toUpperCase() + " pero la caja no cede.";
+        } else {
+            Sonido.error();
+            mensaje = "Esa figura no esta en el dial (GATO, PEZ, BUHO, RANA, ZORRO).";
+        }
+        return false;
+    }
+
+    /** La pista de la tecla H segun el avance del puzzle de la habitacion 2. */
+    public static String darPistaHabitacion2() {
+        if (!tieneObjeto("linterna UV")) {
+            if (mirados.indexOf('R') < 0) {
+                return "PISTA: el saco del perchero guarda una nota en el bolsillo.";
+            }
+            if (mirados.indexOf('C') < 0) {
+                return "PISTA: la nota habla de contar libros. Mira el librero.";
+            }
+            return "PISTA: junta las cifras (rojos, azul, amarillos) y pruebalas en el baul del rincon.";
+        }
+        if (!buhoDescubierto) {
+            return "PISTA: la linterna UV revela lo que el ojo no ve. Prueba con el cuadro.";
+        }
+        if (!tieneObjeto("llave dorada")) {
+            return "PISTA: ya viste el animal oculto. La caja mecanica tiene un dial de animales.";
+        }
+        if (!tieneObjeto("nota secreta")) {
+            return "PISTA: la llave dorada abre el cajon secreto del librero.";
+        }
+        return "PISTA: la nota secreta tiene el codigo de 4 digitos de la puerta.";
+    }
+
+    /** Muestra un texto sin salto de linea y lee la respuesta del jugador (sin espacios). */
+    public static String leerTexto(String texto) {
+        System.out.print(texto);
+        return lector.nextLine().trim();
     }
 
     /** El panel con el preview (mini arte) del objeto y la pregunta. */
@@ -603,6 +851,7 @@ public class Main {
      * @param texto   el detalle, partido automaticamente en lineas.
      */
     public static void mostrarEscena(String titulo, String archivo, String texto) {
+        limpiarPantalla();
         System.out.println();
         System.out.println(bordeEscena());
         System.out.println();
@@ -649,6 +898,7 @@ public class Main {
 
     /** La pantalla final del juego, con fanfarria y pausa para disfrutarla. */
     public static void mostrarVictoria() {
+        limpiarPantalla();
         System.out.println();
         System.out.println(bordeEscena());
         System.out.println();
@@ -702,6 +952,9 @@ public class Main {
      * de pistas segun la dificultad.
      */
     public static String darPista() {
+        if (habitacionActual == 2) {
+            return darPistaHabitacion2();
+        }
         if (mirados.length() == 0) {
             return "PISTA: los objetos guardan secretos. Camina hacia uno y miralo de cerca.";
         }
