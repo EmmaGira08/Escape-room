@@ -1,9 +1,12 @@
 import java.io.File;
 import javax.sound.midi.MidiChannel;
 import javax.sound.midi.MidiSystem;
+import javax.sound.midi.Receiver;
 import javax.sound.midi.Sequence;
 import javax.sound.midi.Sequencer;
+import javax.sound.midi.ShortMessage;
 import javax.sound.midi.Synthesizer;
+import javax.sound.midi.Transmitter;
 
 /**
  * SONIDO - La caja de musica del juego (clase del profesor).
@@ -42,6 +45,9 @@ public class Sonido {
 
     /** La ultima musica pedida, para reanudarla al reactivar la tecla M. */
     public static String rutaMusica = "";
+
+    /** La musica que el secuenciador tiene cargada ahora (vacia si ninguna). */
+    public static String rutaCargada = "";
 
     /**
      * Abre el sintetizador una sola vez, al iniciar el juego.
@@ -109,26 +115,59 @@ public class Sonido {
      */
     public static void musicaFondo(String ruta) {
         rutaMusica = ruta; // se recuerda por si el jugador apaga y prende
+        // Primero se calla por completo la cancion anterior (se detiene y se
+        // cortan sus notas): asi nunca suenan dos habitaciones a la vez.
+        detenerMusica();
+        rutaCargada = "";
         File archivo = new File(ruta);
         if (!archivo.exists() || !musicaActiva) {
             return;
         }
         try {
             Sequence cancion = MidiSystem.getSequence(archivo);
-            secuenciador = MidiSystem.getSequencer();
-            secuenciador.open();
+            if (secuenciador == null) {
+                // Un solo secuenciador para todo el juego: se reutiliza al cambiar de cancion.
+                secuenciador = MidiSystem.getSequencer();
+            }
+            if (!secuenciador.isOpen()) {
+                secuenciador.open();
+            }
             secuenciador.setSequence(cancion);
+            secuenciador.setMicrosecondPosition(0); // la cancion nueva arranca desde el inicio
             secuenciador.setLoopCount(Sequencer.LOOP_CONTINUOUSLY);
             secuenciador.start();
+            rutaCargada = ruta;
         } catch (Exception e) {
-            secuenciador = null;
+            secuenciador = null; // sin audio: el juego sigue, mudo
         }
     }
 
-    /** Detiene la musica de fondo (se puede reanudar con alternarMusica). */
+    /**
+     * Detiene la musica de fondo Y corta las notas que estaban sonando (un
+     * simple stop() deja las notas sostenidas en el sintetizador). Se puede
+     * reanudar con alternarMusica.
+     */
     public static void detenerMusica() {
-        if (secuenciador != null) {
-            secuenciador.stop();
+        if (secuenciador == null) {
+            return;
+        }
+        try {
+            if (secuenciador.isRunning()) {
+                secuenciador.stop();
+            }
+            // Control 123 = "todas las notas off" y 120 = "todo el sonido off", en los 16 canales.
+            for (Transmitter t : secuenciador.getTransmitters()) {
+                Receiver r = t.getReceiver();
+                if (r == null) {
+                    continue;
+                }
+                for (int c = 0; c < 16; c++) {
+                    r.send(new ShortMessage(ShortMessage.CONTROL_CHANGE, c, 123, 0), -1);
+                    r.send(new ShortMessage(ShortMessage.CONTROL_CHANGE, c, 120, 0), -1);
+                }
+            }
+        } catch (Exception e) {
+            // si algo falla aqui, el juego sigue: lo peor es una nota de mas
         }
     }
 
@@ -143,10 +182,10 @@ public class Sonido {
         musicaActiva = !musicaActiva;
         if (!musicaActiva) {
             detenerMusica();
-        } else if (secuenciador != null) {
+        } else if (secuenciador != null && rutaCargada.equals(rutaMusica)) {
             secuenciador.start(); // reanuda donde iba
         } else {
-            musicaFondo(rutaMusica); // nunca habia arrancado
+            musicaFondo(rutaMusica); // nunca habia arrancado, o la cargada es de otra habitacion
         }
     }
 

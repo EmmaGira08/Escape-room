@@ -534,6 +534,7 @@ public class Main {
      */
     public static boolean siguienteHabitacion() {
         int anterior = habitacionActual;
+        Sonido.detenerMusica(); // al cruzar la puerta calla la musica de la habitacion que dejas
         habitacionActual++;
         if (!cargarMundo(habitacionActual)) {
             System.out.println(" No se pudieron cargar los archivos de la habitacion "
@@ -550,16 +551,14 @@ public class Main {
     /**
      * Pone la musica de fondo de una habitacion: la 1 usa musica/ambiente.mid
      * y las demas musica/ambienteN.mid (la 2 usa ambiente2.mid). Si el archivo
-     * de esa habitacion no existe, se queda con la musica que ya suena.
+     * de esa habitacion no existe, usa musica/ambiente.mid. Siempre suena UNA
+     * sola cancion: Sonido.musicaFondo calla la anterior antes de empezar.
      *
      * @param numero el numero de la habitacion a la que entra el jugador.
      */
     public static void iniciarMusicaHabitacion(int numero) {
         String ruta = (numero == 1) ? "musica/ambiente.mid" : "musica/ambiente" + numero + ".mid";
         if (!new File(ruta).exists()) {
-            if (Sonido.secuenciador != null) {
-                return; // sin cancion propia: sigue sonando la anterior
-            }
             ruta = "musica/ambiente.mid";
         }
         Sonido.musicaFondo(ruta);
