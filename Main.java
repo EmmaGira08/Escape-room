@@ -458,3 +458,59 @@ public class Main {
             System.out.println(" Entrada invalida. Responde S o N.");
         }
     }
+
+    /**
+     * PLACEHOLDER 3 - EL ASCII ART DEL JUEGO.
+     *
+     * <p>Debe configurar la identidad visual: un titulo propio del equipo
+     * (reemplacen arte/titulo.txt o elijan el archivo segun el tipo de juego
+     * o la dificultad), y la decoracion de cada habitacion (por ejemplo un
+     * arte distinto al entrar a la 2 y a la 3). Hoy solo imprime el titulo
+     * generico del profesor.</p>
+     */
+    public static void configurarArte() {
+        // El titulo propio del equipo; si falta el archivo, se usa el del profesor.
+        String ruta = "arte/titulo_equipo.txt";
+        if (!new File(ruta).exists()) {
+            ruta = "arte/titulo.txt";
+        }
+        imprimirArte(ruta);
+        System.out.println();
+    }
+
+    /**
+     * La pantalla de entrada de una habitacion: su nombre, su arte
+     * (arte/entrada_hN.txt), una frase de bienvenida y los datos de la partida.
+     * Se muestra al empezar y en cada transicion entre habitaciones.
+     *
+     * @param numero la habitacion a la que entra el jugador.
+     * @param saludo una frase previa (por ejemplo el escape de la anterior) o "".
+     */
+    public static void mostrarEntradaHabitacion(int numero, String saludo) {
+        limpiarPantalla();
+        System.out.println();
+        System.out.println(bordeEscena());
+        System.out.println();
+        if (!saludo.isEmpty()) {
+            System.out.println(centrar(saludo, ANCHO_ESCENA));
+            System.out.println();
+        }
+        System.out.println(centrar("HABITACION " + numero + " DE " + TOTAL_HABITACIONES + ": "
+                + NOMBRES_HABITACION[numero].toUpperCase(), ANCHO_ESCENA));
+        System.out.println();
+        imprimirArte("arte/entrada_h" + numero + ".txt");
+        System.out.println();
+        String[] lineas = partirTexto(TEXTOS_ENTRADA[numero], 48);
+        for (int i = 0; i < lineas.length; i++) {
+            System.out.println(centrar(lineas[i], ANCHO_ESCENA));
+        }
+        System.out.println();
+        System.out.println(centrar(nombreJugador + " | " + NOMBRES_MODO[tipoJuego] + " | "
+                + NOMBRES_DIFICULTAD[dificultad], ANCHO_ESCENA));
+        System.out.println();
+        System.out.println(bordeEscena());
+        System.out.print(centrar("[ ENTER para entrar ]", ANCHO_ESCENA));
+        lector.nextLine();
+    }
+
+    /**
