@@ -184,3 +184,277 @@ public class Main {
         "el numero MENOS 10",
         "el numero escrito AL REVES"
     };
+
+    /** El indice (0 a 4) de la operacion sorteada para esta habitacion. */
+    public static int operacionElegida;
+
+    /** La clave de la puerta: la operacion aplicada al numero del cofre. */
+    public static String clave;
+
+    /**
+     * El ciclo de vida del juego: configuracion inicial (los placeholders),
+     * carga de la habitacion 1 y el ciclo principal de comandos.
+     */
+    public static void main(String[] args) {
+        Sonido.iniciar();
+
+        // ---- Configuracion inicial: aqui viven 3 de los placeholders ----
+        configurarArte();
+        tipoJuego = seleccionarTipoJuego(); // en HABITACION UNICA deja la elegida en habitacionActual
+        configurarJugador();
+
+        if (!cargarMundo(habitacionActual)) {
+            return; // sin datos no hay juego
+        }
+        mostrarEntradaHabitacion(habitacionActual, "");
+        iniciarMusicaHabitacion(habitacionActual);
+
+        boolean escapo = false;
+        boolean jugando = true;
+        while (jugando) {
+            dibujarPantalla(panelEstado());
+            System.out.print(" > ");
+            String comando = lector.nextLine().trim().toUpperCase();
+            if (comando.equals("Q")) {
+                jugando = false;
+            } else if (comando.equals("H")) {
+                mensaje = pedirPista(); // respeta el limite de pistas de la dificultad
+            } else if (comando.equals("M")) {
+                Sonido.alternarMusica();
+                mensaje = "Musica de fondo: " + (Sonido.musicaActiva ? "ACTIVADA" : "APAGADA");
+            } else if (comando.equals("E")) {
+                Sonido.alternarEfectos();
+                mensaje = "Efectos de sonido: " + (Sonido.efectosActivos ? "ACTIVADOS" : "APAGADOS");
+            } else if (comando.equals("X")) {
+                easterEgg(); // la tecla secreta (no aparece en el panel)
+            } else {
+                escapo = mover(comando);
+                if (!escapo) {
+                    revisarMovimientos(); // CONTRARRELOJ: se acabaron los movimientos?
+                }
+                if (escapo || derrota) {
+                    jugando = false;
+                }
+            }
+        }
+       if (!escapo) {
+            System.out.println();
+            if (derrota) {
+                System.out.println(" " + mensajeDerrota);
+            } else {
+                System.out.println(" Te rindes. La habitacion gana esta vez...");
+            }
+        }
+        Sonido.apagar(); // sin esto el programa no termina
+    }
+
+    /* ====================================================================
+     *                    LOS PLACEHOLDERS DEL EQUIPO
+     *
+     * El motor YA llama a estos metodos. Completarlos es obligatorio para
+     * terminar el juego. Cada uno explica su contrato en el javadoc.
+     * ==================================================================== */
+
+    /**
+     * PLACEHOLDER 1 - EL TIPO DE JUEGO.
+     *
+     * <p>Debe mostrar un menu inicial y leer la opcion del jugador (validada,
+     * como leerOpcion()). Modos sugeridos: 1 = HISTORIA (las 3 habitaciones),
+     * 2 = HABITACION UNICA (elegir cual y escapar solo de esa),
+     * 3 = CONTRARRELOJ (historia con movimientos limitados). El modo elegido
+     * se guarda en tipoJuego y el resto del motor debe respetarlo.</p>
+     *
+     * @return el modo elegido por el jugador (por ahora siempre 1).
+     */
+    public static int seleccionarTipoJuego() {
+        System.out.println(" ============ MODO DE JUEGO ============");
+        System.out.println("   1. HISTORIA          las " + TOTAL_HABITACIONES + " habitaciones, una tras otra");
+        System.out.println("   2. HABITACION UNICA  eliges una y escapas solo de esa");
+        System.out.println("   3. CONTRARRELOJ      la historia con movimientos limitados");
+        System.out.println();
+        int modo = leerEntero(" Elige el modo (1-3): ", 1, 3);
+
+        habitacionActual = 1; // por defecto se empieza en la primera
+        if (modo == MODO_UNICA) {
+            for (int i = 1; i <= TOTAL_HABITACIONES; i++) {
+                System.out.println("   " + i + ". " + NOMBRES_HABITACION[i]);
+            }
+            habitacionActual = leerEntero(" Habitacion (1-" + TOTAL_HABITACIONES + "): ", 1, TOTAL_HABITACIONES);
+        }
+        System.out.println();
+        return modo;
+    }
+
+    /**
+     * Cuantos movimientos tiene el jugador en CONTRARRELOJ segun la dificultad.
+     * La ruta perfecta de las 3 habitaciones cuesta 227 movimientos, asi que
+     * incluso en DIFICIL (330) queda algo de margen para equivocarse.
+     *
+     * @return el limite de movimientos de la partida.
+     */
+    public static int limiteMovimientos() {
+        if (dificultad == 1) {
+            return 600;
+        }
+        if (dificultad == 2) {
+            return 450;
+        }
+        return 330;
+    }
+
+    /**
+     * Cuantas pistas permite la dificultad actual.
+     *
+     * @return -1 si son ilimitadas (FACIL); si no, el maximo de la partida.
+     */
+    public static int limitePistas() {
+        if (dificultad == 1) {
+            return -1;
+        }
+        if (dificultad == 2) {
+            return PISTAS_NORMAL;
+        }
+        return PISTAS_DIFICIL;
+    }
+
+    /**
+     * La tecla H: entrega la pista de la habitacion solo si la dificultad aun
+     * permite pistas, y cuenta la que se gasta.
+     *
+     * @return la pista, o el aviso de que ya no quedan.
+     */
+    public static String pedirPista() {
+        int limite = limitePistas();
+        if (limite >= 0 && pistasUsadas >= limite) {
+            return "Ya gastaste tus " + limite + " pistas. Ahora estas solo, " + nombreJugador + ".";
+        }
+        pistasUsadas++;
+        String pista = darPista();
+        if (limite >= 0) {
+            pista = pista + " (" + (limite - pistasUsadas) + " restantes)";
+        }
+        return pista;
+    }
+    /** CONTRARRELOJ: si no quedan movimientos, el jugador pierde. */
+    public static void revisarMovimientos() {
+        if (tipoJuego == MODO_CONTRARRELOJ && movimientosRestantes <= 0) {
+            derrota = true;
+            mensajeDerrota = "Se acabo el tiempo: te quedaste sin movimientos, " + nombreJugador
+                    + ". La habitacion gana esta vez...";
+        }
+    }
+
+    /**
+     * PLACEHOLDER 2 - LA TERMINAL INICIAL DEL JUGADOR.
+     *
+     * <p>Debe configurar la partida conversando con el jugador: preguntar su
+     * nombre (guardarlo en nombreJugador y usarlo en los mensajes del juego),
+     * elegir la dificultad 1-3 (guardarla en dificultad) y aplicarla: por
+     * ejemplo en FACIL hay pistas ilimitadas, en NORMAL cuestan y en DIFICIL
+     * la puerta admite maximo 3 intentos de clave. Tambien pueden ofrecer
+     * aqui el estado inicial del sonido (M/E).</p>
+     */
+    public static void configurarJugador() {
+        System.out.println(" ========== TERMINAL DEL JUGADOR ==========");
+        nombreJugador = leerNombre();
+
+        System.out.println();
+        System.out.println("   1. FACIL    pistas ilimitadas");
+        System.out.println("   2. NORMAL   " + PISTAS_NORMAL + " pistas en toda la partida");
+        System.out.println("   3. DIFICIL  " + PISTAS_DIFICIL + " pistas y solo " + MAX_INTENTOS_DIFICIL
+                + " intentos de clave por puerta");
+        dificultad = leerEntero(" Dificultad (1-3): ", 1, 3);
+
+        System.out.println();
+        Sonido.musicaActiva = leerSiNo(" Musica de fondo? (S/N, ENTER = S): ");
+        Sonido.efectosActivos = leerSiNo(" Efectos de sonido? (S/N, ENTER = S): ");
+
+        // Se aplica la configuracion: contadores en cero y, en CONTRARRELOJ, el limite.
+        pistasUsadas = 0;
+        movimientos = 0;
+        movimientosRestantes = (tipoJuego == MODO_CONTRARRELOJ) ? limiteMovimientos() : 0;
+
+        System.out.println();
+        System.out.println(" Bienvenido, " + nombreJugador + ". Modo " + NOMBRES_MODO[tipoJuego]
+                + " | Dificultad " + NOMBRES_DIFICULTAD[dificultad]);
+        if (tipoJuego == MODO_CONTRARRELOJ) {
+            System.out.println(" Tienes " + movimientosRestantes + " movimientos. Cada W, A, S o D cuenta.");
+        }
+        System.out.println();
+    }
+
+    /**
+     * Pide el nombre del jugador hasta que sea valido: maximo 15 caracteres,
+     * solo letras, numeros y espacios. ENTER solo deja el nombre por defecto.
+     *
+     * @return el nombre elegido.
+     */
+    public static String leerNombre() {
+        while (true) {
+            System.out.print(" Tu nombre (ENTER = aventurero): ");
+            String nombre = lector.nextLine().trim();
+            if (nombre.isEmpty()) {
+                return "aventurero";
+            }
+            boolean valido = nombre.length() <= 15;
+            for (int i = 0; valido && i < nombre.length(); i++) {
+                char c = nombre.charAt(i);
+                if (!Character.isLetterOrDigit(c) && c != ' ') {
+                    valido = false;
+                }
+            }
+            if (valido) {
+                return nombre;
+            }
+            System.out.println(" Nombre invalido: maximo 15 letras, numeros o espacios.");
+        }
+    }
+
+    /**
+     * Lee un numero entero entre min y max, repitiendo la pregunta hasta que
+     * la entrada sea valida. Nunca rompe el programa con letras o simbolos.
+     *
+     * @param pregunta el texto que se muestra antes de leer.
+     * @param min      el valor minimo aceptado.
+     * @param max      el valor maximo aceptado.
+     * @return el numero elegido, dentro del rango.
+     */
+    public static int leerEntero(String pregunta, int min, int max) {
+        while (true) {
+            System.out.print(pregunta);
+            String entrada = lector.nextLine().trim();
+            boolean soloDigitos = !entrada.isEmpty() && entrada.length() <= 6;
+            for (int i = 0; soloDigitos && i < entrada.length(); i++) {
+                if (!Character.isDigit(entrada.charAt(i))) {
+                    soloDigitos = false;
+                }
+            }
+            if (soloDigitos) {
+                int valor = Integer.parseInt(entrada);
+                if (valor >= min && valor <= max) {
+                    return valor;
+                }
+            }
+            System.out.println(" Entrada invalida. Escribe un numero de " + min + " a " + max + ".");
+        }
+    }
+
+    /**
+     * Lee una respuesta si/no. ENTER cuenta como SI.
+     *
+     * @param pregunta el texto que se muestra antes de leer.
+     * @return true para S o SI (o ENTER), false para N o NO.
+     */
+    public static boolean leerSiNo(String pregunta) {
+        while (true) {
+            System.out.print(pregunta);
+            String entrada = lector.nextLine().trim().toUpperCase();
+            if (entrada.isEmpty() || entrada.equals("S") || entrada.equals("SI")) {
+                return true;
+            }
+            if (entrada.equals("N") || entrada.equals("NO")) {
+                return false;
+            }
+            System.out.println(" Entrada invalida. Responde S o N.");
+        }
+    }
