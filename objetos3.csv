@@ -1,0 +1,7 @@
+simbolo,nombre,archivo,detalle
+E,el esqueleto encadenado,h3_esqueleto,Un esqueleto atado a la pared sostiene una nota amarillenta: El alquimista solo avanzaba en la direccion del fuego: ARRIBA - DERECHA - ARRIBA - IZQUIERDA.
+F,el cofre de hierro,h3_cofre,Un cofre de hierro con un candado de cruz direccional. Hay que ingresar una secuencia de 4 direcciones: arriba - abajo - izquierda - derecha.
+M,el mueble de pociones y la balanza,h3_mueble,Un mueble con frascos vacios de colores y una balanza de pesas. En la base hay grabada una secuencia: AZUL - ROJO - AMARILLO.
+C,la armadura y su escudo,h3_armadura,Una armadura de metal sostiene un escudo con un candado de 3 digitos. Algo se esconde detras del escudo.
+A,el altar de piedra,h3_altar,Un altar de piedra con una ranura redonda en el centro y un contrapeso mecanico. Parece esperar una gema.
+P,la puerta de salida,h3_puerta,Una pesada puerta de hierro sin teclado ni cerradura visible. Un pasador automatico la mantiene atrancada.
