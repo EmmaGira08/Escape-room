@@ -57,7 +57,19 @@ public class Main {
     public static int habitacionActual = 1;
 
     /** Cuantas habitaciones tiene el juego: la victoria esta tras la ultima. */
-    public static final int TOTAL_HABITACIONES = 2; // subir a medida que se agreguen habitaciones
+    public static final int TOTAL_HABITACIONES = 3; // subir a medida que se agreguen habitaciones
+
+    /** Habitacion 3: la secuencia del cofre de hierro (U arriba, R derecha, L izquierda, D abajo). */
+    public static final String SECUENCIA_COFRE_3 = "URUL";
+
+    /** Habitacion 3: el codigo de 3 digitos del escudo de la armadura (lo da la balanza). */
+    public static final String CODIGO_ESCUDO_3 = "137";
+
+    /** Habitacion 3: true cuando la balanza ya dio el codigo 1-3-7. */
+    public static boolean balanzaResuelta = false;
+
+    /** Habitacion 3: true cuando el altar recibio la gema y solto el pasador de la puerta. */
+    public static boolean mecanismoActivo = false;
 
     /** El codigo de 3 digitos del baul de la habitacion 2 (libros: 3 rojos, 1 azul, 5 amarillos). */
     public static final String CODIGO_BAUL_2 = "315";
@@ -76,6 +88,59 @@ public class Main {
 
     /** El modo elegido en seleccionarTipoJuego() (PLACEHOLDER 1); 1 = historia. */
     public static int tipoJuego = 1;
+
+    /** Modo 1: las 3 habitaciones una tras otra. */
+    public static final int MODO_HISTORIA = 1;
+
+    /** Modo 2: el jugador elige UNA habitacion y escapa solo de esa. */
+    public static final int MODO_UNICA = 2;
+
+    /** Modo 3: la historia completa con un limite de movimientos. */
+    public static final int MODO_CONTRARRELOJ = 3;
+
+    /** Cuantas pistas (tecla H) se permiten en dificultad NORMAL. */
+    public static final int PISTAS_NORMAL = 5;
+
+    /** Cuantas pistas se permiten en dificultad DIFICIL. */
+    public static final int PISTAS_DIFICIL = 2;
+
+    /** Cuantas claves incorrectas aguanta una puerta con teclado en dificultad DIFICIL. */
+    public static final int MAX_INTENTOS_DIFICIL = 3;
+
+    /** Los nombres de las dificultades (el indice es el numero 1 a 3). */
+    public static final String[] NOMBRES_DIFICULTAD = {"", "FACIL", "NORMAL", "DIFICIL"};
+
+    /** Los nombres de los modos (el indice es el numero 1 a 3). */
+    public static final String[] NOMBRES_MODO = {"", "HISTORIA", "HABITACION UNICA", "CONTRARRELOJ"};
+
+    /** Los nombres de las habitaciones (el indice es el numero de la habitacion). */
+    public static final String[] NOMBRES_HABITACION = {"", "El despertar", "El estudio", "El laboratorio"};
+
+    /** El texto de bienvenida de cada habitacion (el indice es su numero). */
+    public static final String[] TEXTOS_ENTRADA = {
+        "",
+        "Despiertas en un cuarto frio. La unica salida es una puerta con un teclado numerico.",
+        "Un estudio polvoriento: libros de colores, un baul, un cuadro y una caja con animales.",
+        "Un laboratorio antiguo: frascos, una armadura con escudo y un altar con una ranura."
+    };
+
+    /** Cuantas pistas ha gastado el jugador en toda la partida. */
+    public static int pistasUsadas = 0;
+
+    /** Cuantos movimientos (W, A, S, D) ha hecho el jugador en toda la partida. */
+    public static int movimientos = 0;
+
+    /** En CONTRARRELOJ: cuantos movimientos le quedan al jugador. */
+    public static int movimientosRestantes = 0;
+
+    /** Cuantas claves incorrectas lleva en la puerta de la habitacion actual. */
+    public static int intentosClave = 0;
+
+    /** true cuando el jugador perdio (sin movimientos o teclado bloqueado). */
+    public static boolean derrota = false;
+
+    /** La razon de la derrota, para mostrarla al terminar. */
+    public static String mensajeDerrota = "";
 
     /** La fila de la matriz donde esta parado el jugador. */
     public static int fila;
@@ -135,12 +200,13 @@ public class Main {
 
         // ---- Configuracion inicial: aqui viven 3 de los placeholders ----
         configurarArte();
-        tipoJuego = seleccionarTipoJuego();
+        tipoJuego = seleccionarTipoJuego(); // en HABITACION UNICA deja la elegida en habitacionActual
         configurarJugador();
 
-        if (!cargarMundo(1)) {
+        if (!cargarMundo(habitacionActual)) {
             return; // sin datos no hay juego
         }
+        mostrarEntradaHabitacion(habitacionActual, "");
         iniciarMusicaHabitacion(habitacionActual);
 
         boolean escapo = false;
@@ -152,7 +218,7 @@ public class Main {
             if (comando.equals("Q")) {
                 jugando = false;
             } else if (comando.equals("H")) {
-                mensaje = darPista();
+                mensaje = pedirPista(); // respeta el limite de pistas de la dificultad
             } else if (comando.equals("M")) {
                 Sonido.alternarMusica();
                 mensaje = "Musica de fondo: " + (Sonido.musicaActiva ? "ACTIVADA" : "APAGADA");
@@ -163,7 +229,10 @@ public class Main {
                 easterEgg(); // la tecla secreta (no aparece en el panel)
             } else {
                 escapo = mover(comando);
-                if (escapo) {
+                if (!escapo) {
+                    revisarMovimientos(); // CONTRARRELOJ: se acabaron los movimientos?
+                }
+                if (escapo || derrota) {
                     jugando = false;
                 }
             }
@@ -171,7 +240,11 @@ public class Main {
 
         if (!escapo) {
             System.out.println();
-            System.out.println(" Te rindes. La habitacion gana esta vez...");
+            if (derrota) {
+                System.out.println(" " + mensajeDerrota);
+            } else {
+                System.out.println(" Te rindes. La habitacion gana esta vez...");
+            }
         }
         Sonido.apagar(); // sin esto el programa no termina
     }
@@ -195,9 +268,82 @@ public class Main {
      * @return el modo elegido por el jugador (por ahora siempre 1).
      */
     public static int seleccionarTipoJuego() {
-        // TODO equipo: menu de modos de juego + lectura validada.
-        System.out.println(" Modo de juego: HISTORIA (TODO equipo: el menu de modos)");
-        return 1;
+        System.out.println(" ============ MODO DE JUEGO ============");
+        System.out.println("   1. HISTORIA          las " + TOTAL_HABITACIONES + " habitaciones, una tras otra");
+        System.out.println("   2. HABITACION UNICA  eliges una y escapas solo de esa");
+        System.out.println("   3. CONTRARRELOJ      la historia con movimientos limitados");
+        System.out.println();
+        int modo = leerEntero(" Elige el modo (1-3): ", 1, 3);
+
+        habitacionActual = 1; // por defecto se empieza en la primera
+        if (modo == MODO_UNICA) {
+            for (int i = 1; i <= TOTAL_HABITACIONES; i++) {
+                System.out.println("   " + i + ". " + NOMBRES_HABITACION[i]);
+            }
+            habitacionActual = leerEntero(" Habitacion (1-" + TOTAL_HABITACIONES + "): ", 1, TOTAL_HABITACIONES);
+        }
+        System.out.println();
+        return modo;
+    }
+
+    /**
+     * Cuantos movimientos tiene el jugador en CONTRARRELOJ segun la dificultad.
+     * La ruta perfecta de las 3 habitaciones cuesta 227 movimientos, asi que
+     * incluso en DIFICIL (330) queda algo de margen para equivocarse.
+     *
+     * @return el limite de movimientos de la partida.
+     */
+    public static int limiteMovimientos() {
+        if (dificultad == 1) {
+            return 600;
+        }
+        if (dificultad == 2) {
+            return 450;
+        }
+        return 330;
+    }
+
+    /**
+     * Cuantas pistas permite la dificultad actual.
+     *
+     * @return -1 si son ilimitadas (FACIL); si no, el maximo de la partida.
+     */
+    public static int limitePistas() {
+        if (dificultad == 1) {
+            return -1;
+        }
+        if (dificultad == 2) {
+            return PISTAS_NORMAL;
+        }
+        return PISTAS_DIFICIL;
+    }
+
+    /**
+     * La tecla H: entrega la pista de la habitacion solo si la dificultad aun
+     * permite pistas, y cuenta la que se gasta.
+     *
+     * @return la pista, o el aviso de que ya no quedan.
+     */
+    public static String pedirPista() {
+        int limite = limitePistas();
+        if (limite >= 0 && pistasUsadas >= limite) {
+            return "Ya gastaste tus " + limite + " pistas. Ahora estas solo, " + nombreJugador + ".";
+        }
+        pistasUsadas++;
+        String pista = darPista();
+        if (limite >= 0) {
+            pista = pista + " (" + (limite - pistasUsadas) + " restantes)";
+        }
+        return pista;
+    }
+
+    /** CONTRARRELOJ: si no quedan movimientos, el jugador pierde. */
+    public static void revisarMovimientos() {
+        if (tipoJuego == MODO_CONTRARRELOJ && movimientosRestantes <= 0) {
+            derrota = true;
+            mensajeDerrota = "Se acabo el tiempo: te quedaste sin movimientos, " + nombreJugador
+                    + ". La habitacion gana esta vez...";
+        }
     }
 
     /**
@@ -211,9 +357,108 @@ public class Main {
      * aqui el estado inicial del sonido (M/E).</p>
      */
     public static void configurarJugador() {
-        // TODO equipo: pedir nombre, elegir dificultad y aplicarla.
-        System.out.println(" Jugador: " + nombreJugador + " | Dificultad: " + dificultad
-                + " (TODO equipo: la terminal inicial)");
+        System.out.println(" ========== TERMINAL DEL JUGADOR ==========");
+        nombreJugador = leerNombre();
+
+        System.out.println();
+        System.out.println("   1. FACIL    pistas ilimitadas");
+        System.out.println("   2. NORMAL   " + PISTAS_NORMAL + " pistas en toda la partida");
+        System.out.println("   3. DIFICIL  " + PISTAS_DIFICIL + " pistas y solo " + MAX_INTENTOS_DIFICIL
+                + " intentos de clave por puerta");
+        dificultad = leerEntero(" Dificultad (1-3): ", 1, 3);
+
+        System.out.println();
+        Sonido.musicaActiva = leerSiNo(" Musica de fondo? (S/N, ENTER = S): ");
+        Sonido.efectosActivos = leerSiNo(" Efectos de sonido? (S/N, ENTER = S): ");
+
+        // Se aplica la configuracion: contadores en cero y, en CONTRARRELOJ, el limite.
+        pistasUsadas = 0;
+        movimientos = 0;
+        movimientosRestantes = (tipoJuego == MODO_CONTRARRELOJ) ? limiteMovimientos() : 0;
+
+        System.out.println();
+        System.out.println(" Bienvenido, " + nombreJugador + ". Modo " + NOMBRES_MODO[tipoJuego]
+                + " | Dificultad " + NOMBRES_DIFICULTAD[dificultad]);
+        if (tipoJuego == MODO_CONTRARRELOJ) {
+            System.out.println(" Tienes " + movimientosRestantes + " movimientos. Cada W, A, S o D cuenta.");
+        }
+        System.out.println();
+    }
+
+    /**
+     * Pide el nombre del jugador hasta que sea valido: maximo 15 caracteres,
+     * solo letras, numeros y espacios. ENTER solo deja el nombre por defecto.
+     *
+     * @return el nombre elegido.
+     */
+    public static String leerNombre() {
+        while (true) {
+            System.out.print(" Tu nombre (ENTER = aventurero): ");
+            String nombre = lector.nextLine().trim();
+            if (nombre.isEmpty()) {
+                return "aventurero";
+            }
+            boolean valido = nombre.length() <= 15;
+            for (int i = 0; valido && i < nombre.length(); i++) {
+                char c = nombre.charAt(i);
+                if (!Character.isLetterOrDigit(c) && c != ' ') {
+                    valido = false;
+                }
+            }
+            if (valido) {
+                return nombre;
+            }
+            System.out.println(" Nombre invalido: maximo 15 letras, numeros o espacios.");
+        }
+    }
+
+    /**
+     * Lee un numero entero entre min y max, repitiendo la pregunta hasta que
+     * la entrada sea valida. Nunca rompe el programa con letras o simbolos.
+     *
+     * @param pregunta el texto que se muestra antes de leer.
+     * @param min      el valor minimo aceptado.
+     * @param max      el valor maximo aceptado.
+     * @return el numero elegido, dentro del rango.
+     */
+    public static int leerEntero(String pregunta, int min, int max) {
+        while (true) {
+            System.out.print(pregunta);
+            String entrada = lector.nextLine().trim();
+            boolean soloDigitos = !entrada.isEmpty() && entrada.length() <= 6;
+            for (int i = 0; soloDigitos && i < entrada.length(); i++) {
+                if (!Character.isDigit(entrada.charAt(i))) {
+                    soloDigitos = false;
+                }
+            }
+            if (soloDigitos) {
+                int valor = Integer.parseInt(entrada);
+                if (valor >= min && valor <= max) {
+                    return valor;
+                }
+            }
+            System.out.println(" Entrada invalida. Escribe un numero de " + min + " a " + max + ".");
+        }
+    }
+
+    /**
+     * Lee una respuesta si/no. ENTER cuenta como SI.
+     *
+     * @param pregunta el texto que se muestra antes de leer.
+     * @return true para S o SI (o ENTER), false para N o NO.
+     */
+    public static boolean leerSiNo(String pregunta) {
+        while (true) {
+            System.out.print(pregunta);
+            String entrada = lector.nextLine().trim().toUpperCase();
+            if (entrada.isEmpty() || entrada.equals("S") || entrada.equals("SI")) {
+                return true;
+            }
+            if (entrada.equals("N") || entrada.equals("NO")) {
+                return false;
+            }
+            System.out.println(" Entrada invalida. Responde S o N.");
+        }
     }
 
     /**
@@ -226,9 +471,48 @@ public class Main {
      * generico del profesor.</p>
      */
     public static void configurarArte() {
-        // TODO equipo: titulo propio y arte por habitacion/dificultad.
-        imprimirArte("arte/titulo.txt");
+        // El titulo propio del equipo; si falta el archivo, se usa el del profesor.
+        String ruta = "arte/titulo_equipo.txt";
+        if (!new File(ruta).exists()) {
+            ruta = "arte/titulo.txt";
+        }
+        imprimirArte(ruta);
         System.out.println();
+    }
+
+    /**
+     * La pantalla de entrada de una habitacion: su nombre, su arte
+     * (arte/entrada_hN.txt), una frase de bienvenida y los datos de la partida.
+     * Se muestra al empezar y en cada transicion entre habitaciones.
+     *
+     * @param numero la habitacion a la que entra el jugador.
+     * @param saludo una frase previa (por ejemplo el escape de la anterior) o "".
+     */
+    public static void mostrarEntradaHabitacion(int numero, String saludo) {
+        limpiarPantalla();
+        System.out.println();
+        System.out.println(bordeEscena());
+        System.out.println();
+        if (!saludo.isEmpty()) {
+            System.out.println(centrar(saludo, ANCHO_ESCENA));
+            System.out.println();
+        }
+        System.out.println(centrar("HABITACION " + numero + " DE " + TOTAL_HABITACIONES + ": "
+                + NOMBRES_HABITACION[numero].toUpperCase(), ANCHO_ESCENA));
+        System.out.println();
+        imprimirArte("arte/entrada_h" + numero + ".txt");
+        System.out.println();
+        String[] lineas = partirTexto(TEXTOS_ENTRADA[numero], 48);
+        for (int i = 0; i < lineas.length; i++) {
+            System.out.println(centrar(lineas[i], ANCHO_ESCENA));
+        }
+        System.out.println();
+        System.out.println(centrar(nombreJugador + " | " + NOMBRES_MODO[tipoJuego] + " | "
+                + NOMBRES_DIFICULTAD[dificultad], ANCHO_ESCENA));
+        System.out.println();
+        System.out.println(bordeEscena());
+        System.out.print(centrar("[ ENTER para entrar ]", ANCHO_ESCENA));
+        lector.nextLine();
     }
 
     /**
@@ -256,20 +540,9 @@ public class Main {
                     + habitacionActual + ". Fin del juego.");
             return true; // sin datos no hay juego
         }
-        limpiarPantalla();
-        System.out.println();
-        System.out.println(bordeEscena());
-        System.out.println();
-        System.out.println(centrar("Escapaste de la habitacion " + anterior + "...", ANCHO_ESCENA));
-        System.out.println(centrar("La puerta se cierra a tus espaldas con un golpe seco.", ANCHO_ESCENA));
-        System.out.println();
-        System.out.println(centrar("HABITACION " + habitacionActual, ANCHO_ESCENA));
-        System.out.println(centrar("Tu inventario sigue contigo.", ANCHO_ESCENA));
-        System.out.println();
-        System.out.println(bordeEscena());
-        System.out.print(centrar("[ ENTER para entrar ]", ANCHO_ESCENA));
-        lector.nextLine();
-        mensaje = "Entras a la habitacion " + habitacionActual + ". Explora.";
+        mostrarEntradaHabitacion(habitacionActual,
+                "Escapaste de la habitacion " + anterior + ". La puerta se cierra tras de ti.");
+        mensaje = "Entras a la habitacion " + habitacionActual + ". Tu inventario sigue contigo.";
         iniciarMusicaHabitacion(habitacionActual);
         return false; // el ciclo sigue jugando en la nueva habitacion
     }
@@ -337,6 +610,7 @@ public class Main {
         calcularAnchoMapa();
         buscarInicio();
         mirados = ""; // cada habitacion cuenta sus propios objetos mirados
+        intentosClave = 0; // y sus propios intentos de clave
 
         // El numero del cofre: decena 1-9 y unidad par distinta de cero,
         // asi la MITAD es exacta y el numero AL REVES no empieza por cero.
@@ -351,6 +625,8 @@ public class Main {
 
         // La habitacion 2 tiene su propio puzzle: la clave es fija (8420).
         buhoDescubierto = false;
+        balanzaResuelta = false;
+        mecanismoActivo = false;
         if (numero == 2) {
             clave = CLAVE_HABITACION_2;
         }
@@ -452,19 +728,30 @@ public class Main {
     /** El panel cuando no hay objeto cerca: progreso, inventario y comandos. */
     public static String[] panelEstado() {
         int lineasInventario = Math.max(1, totalInventario);
-        String[] contenido = new String[4 + lineasInventario];
-        contenido[0] = "Habitacion " + habitacionActual + " de " + TOTAL_HABITACIONES;
-        contenido[1] = "Objetos mirados: " + mirados.length() + " de " + objetos.length;
-        contenido[2] = "";
-        contenido[3] = "Inventario:";
+        int extra = (tipoJuego == MODO_CONTRARRELOJ) ? 1 : 0; // la linea de movimientos
+        String[] contenido = new String[7 + extra + lineasInventario];
+        int k = 0;
+        contenido[k++] = "Jugador: " + nombreJugador;
+        contenido[k++] = "Dificultad: " + NOMBRES_DIFICULTAD[dificultad];
+        contenido[k++] = "Habitacion " + habitacionActual + " de " + TOTAL_HABITACIONES;
+        contenido[k++] = "Objetos mirados: " + mirados.length() + " de " + objetos.length;
+        if (limitePistas() < 0) {
+            contenido[k++] = "Pistas: ilimitadas";
+        } else {
+            contenido[k++] = "Pistas: " + (limitePistas() - pistasUsadas) + " de " + limitePistas();
+        }
+        if (extra == 1) {
+            contenido[k++] = "Movimientos: " + movimientosRestantes;
+        }
+        contenido[k++] = "";
+        contenido[k++] = "Inventario:";
         if (totalInventario == 0) {
-            contenido[4] = "  (vacio)";
+            contenido[k++] = "  (vacio)";
         } else {
             for (int i = 0; i < totalInventario; i++) {
-                contenido[4 + i] = "  - " + inventario[i];
+                contenido[k++] = "  - " + inventario[i];
             }
         }
-        // TODO equipo: mostrar aqui el nombre del jugador y la dificultad.
 
         String[] caja = enmarcar(contenido);
         String[] panel = new String[caja.length + 4];
@@ -499,6 +786,11 @@ public class Main {
         } else {
             mensaje = "No entiendo '" + comando + "'. Usa W A S D (H = pista, Q = rendirse).";
             return false;
+        }
+
+        movimientos++; // cada W, A, S o D cuenta (tambien chocar con un muro)
+        if (tipoJuego == MODO_CONTRARRELOJ) {
+            movimientosRestantes--;
         }
 
         char casilla = casillaZona(nuevaFila, nuevaColumna);
@@ -564,7 +856,9 @@ public class Main {
         if (habitacionActual == 2) {
             return objetoHabitacion2(simbolo, objeto);
         }
-        // TODO equipo: habitacion 3 -> if (habitacionActual == 3) { ... }
+        if (habitacionActual == 3) {
+            return objetoHabitacion3(simbolo, objeto);
+        }
 
         // La alfombra entrega la llave al inventario la primera vez.
         if (simbolo == 'A') {
@@ -741,7 +1035,7 @@ public class Main {
         mostrarEscena(objeto[1], objeto[2], objeto[3]);
         String animal = leerTexto(centrar("Girar el dial a (solo ENTER para alejarte): ", ANCHO_ESCENA)).toLowerCase();
         System.out.println(bordeEscena());
-        if (animal.equals("buho") || animal.equals("búho")) {
+        if (animal.equals("buho") || animal.equals("b\u00faho")) {
             Sonido.exito();
             guardarObjeto("llave dorada");
             mostrarEscena("la caja abierta", "h2_caja_abierta",
@@ -783,6 +1077,283 @@ public class Main {
             return "PISTA: la llave dorada abre el cajon secreto del librero.";
         }
         return "PISTA: la nota secreta tiene el codigo de 4 digitos de la puerta.";
+    }
+
+    /* ==================== HABITACION 3: EL LABORATORIO ==================== */
+
+    /**
+     * Los comportamientos de la habitacion 3. Cadena del puzzle:
+     * esqueleto (nota: ARRIBA-DERECHA-ARRIBA-IZQUIERDA) -> cofre de hierro
+     * (cruz direccional) -> pociones (rojo 3, amarillo 7, azul 1) -> balanza
+     * (orden AZUL-ROJO-AMARILLO = 1-3-7) -> escudo de la armadura (137) ->
+     * gema verde -> altar -> el pasador suelta la puerta.
+     *
+     * @param simbolo la letra del objeto (E, F, M, C, A o P).
+     * @param objeto  la fila del objetos3.csv de ese objeto.
+     * @return true si el juego termina (la puerta de la ultima habitacion).
+     */
+    public static boolean objetoHabitacion3(char simbolo, String[] objeto) {
+        if (simbolo == 'P') {
+            return abrirPuertaAltar(objeto);
+        }
+        if (simbolo == 'F') {
+            return abrirCofreHierro(objeto);
+        }
+        if (simbolo == 'M') {
+            return usarBalanza(objeto);
+        }
+        if (simbolo == 'C') {
+            return abrirEscudo(objeto);
+        }
+        if (simbolo == 'A') {
+            return usarAltar(objeto);
+        }
+        // El esqueleto y cualquier otro objeto: solo se miran (la nota esta en el CSV).
+        abrirEscena(objeto);
+        recordarMirado(simbolo);
+        mensaje = "Miraste " + objeto[1] + ". Sigues frente al objeto.";
+        return false;
+    }
+
+    /**
+     * Convierte lo que escribe el jugador en letras de direccion. Acepta
+     * palabras (arriba, abajo, izquierda, derecha) o teclas (W, S, A, D),
+     * separadas por espacios, comas o guiones.
+     *
+     * @param texto la entrada del jugador.
+     * @return por ejemplo "URUL", "" si no escribio nada, o null si algo no es una direccion.
+     */
+    public static String leerDirecciones(String texto) {
+        String limpio = texto.toLowerCase().replace('-', ' ').replace(',', ' ').trim();
+        if (limpio.isEmpty()) {
+            return "";
+        }
+        String[] partes = limpio.split("\\s+");
+        String letras = "";
+        for (int i = 0; i < partes.length; i++) {
+            if (partes[i].equals("arriba") || partes[i].equals("w")) {
+                letras = letras + "U";
+            } else if (partes[i].equals("derecha") || partes[i].equals("d")) {
+                letras = letras + "R";
+            } else if (partes[i].equals("abajo") || partes[i].equals("s")) {
+                letras = letras + "D";
+            } else if (partes[i].equals("izquierda") || partes[i].equals("a")) {
+                letras = letras + "L";
+            } else {
+                return null;
+            }
+        }
+        return letras;
+    }
+
+    /** El cofre de hierro: candado de cruz direccional; entrega las pociones. */
+    public static boolean abrirCofreHierro(String[] objeto) {
+        recordarMirado('F');
+        if (tieneObjeto("pociones de colores")) {
+            mostrarEscena("el cofre abierto", "h3_cofre_abierto", "El cofre ya esta abierto y vacio.");
+            esperarEnter();
+            mensaje = "El cofre ya no guarda nada mas.";
+            return false;
+        }
+        mostrarEscena(objeto[1], objeto[2], objeto[3]);
+        String entrada = leerTexto(centrar("Direcciones (solo ENTER para alejarte): ", ANCHO_ESCENA));
+        System.out.println(bordeEscena());
+        String letras = leerDirecciones(entrada);
+        if (letras != null && letras.equals(SECUENCIA_COFRE_3)) {
+            Sonido.exito();
+            guardarObjeto("pociones de colores");
+            mostrarEscena("el cofre abierto", "h3_cofre_abierto",
+                    "CLIC. El candado cede. Dentro hay 3 pociones: ROJA (3 oz) - AMARILLA (7 oz) - AZUL (1 oz). Las guardas en tu inventario.");
+            esperarEnter();
+            Sonido.recoger();
+            mensaje = "Guardaste las POCIONES DE COLORES en tu inventario.";
+        } else if (letras != null && letras.isEmpty()) {
+            mensaje = "Te alejas del cofre sin intentar nada.";
+        } else if (letras == null) {
+            Sonido.error();
+            mensaje = "Solo valen direcciones: arriba, abajo, izquierda, derecha (o W, S, A, D).";
+        } else {
+            Sonido.error();
+            mensaje = "SECUENCIA INCORRECTA. El candado no se mueve.";
+        }
+        return false;
+    }
+
+    /** El peso en onzas de una pocion segun su color, o 0 si no es un color valido. */
+    public static int pesoPocion(String color) {
+        if (color.equals("rojo") || color.equals("roja")) {
+            return 3;
+        }
+        if (color.equals("amarillo") || color.equals("amarilla")) {
+            return 7;
+        }
+        if (color.equals("azul")) {
+            return 1;
+        }
+        return 0;
+    }
+
+    /**
+     * La balanza del mueble: el jugador pone las 3 pociones en orden. Si sigue
+     * la secuencia grabada en la base (AZUL - ROJO - AMARILLO) la balanza marca
+     * 1 - 3 - 7, el codigo del escudo.
+     */
+    public static boolean usarBalanza(String[] objeto) {
+        recordarMirado('M');
+        mostrarEscena(objeto[1], objeto[2], objeto[3]);
+        if (!tieneObjeto("pociones de colores")) {
+            esperarEnter();
+            Sonido.error();
+            mensaje = "La balanza esta vacia. Necesitas algo que pesar.";
+            return false;
+        }
+        String entrada = leerTexto(centrar("Pociones en orden, ej: rojo azul amarillo (ENTER = alejarte): ", ANCHO_ESCENA));
+        System.out.println(bordeEscena());
+        if (entrada.isEmpty()) {
+            mensaje = "Te alejas de la balanza sin pesar nada.";
+            return false;
+        }
+        String[] colores = entrada.toLowerCase().replace(',', ' ').replace('-', ' ').trim().split("\\s+");
+        boolean valido = colores.length == 3;
+        for (int i = 0; valido && i < 3; i++) {
+            if (pesoPocion(colores[i]) == 0) {
+                valido = false;
+            }
+        }
+        if (valido && (colores[0].equals(colores[1]) || colores[0].equals(colores[2]) || colores[1].equals(colores[2]))) {
+            valido = false;
+        }
+        if (!valido) {
+            Sonido.error();
+            mensaje = "Pon las 3 pociones, cada una una vez: rojo, amarillo y azul.";
+            return false;
+        }
+        boolean enOrden = pesoPocion(colores[0]) == 1 && pesoPocion(colores[1]) == 3 && pesoPocion(colores[2]) == 7;
+        String marca = pesoPocion(colores[0]) + " - " + pesoPocion(colores[1]) + " - " + pesoPocion(colores[2]);
+        if (enOrden) {
+            Sonido.exito();
+            balanzaResuelta = true;
+            mostrarEscena("la balanza", "h3_balanza",
+                    "Pones las pociones en el orden de la base y la balanza marca " + marca
+                    + ". Anotas el numero: " + CODIGO_ESCUDO_3 + ".");
+            esperarEnter();
+            mensaje = "La balanza marco 1 - 3 - 7. Codigo: " + CODIGO_ESCUDO_3 + ".";
+        } else {
+            Sonido.error();
+            mensaje = "La balanza marca " + marca + " pero no coincide con la secuencia grabada en la base.";
+        }
+        return false;
+    }
+
+    /** La armadura: el escudo tiene un candado de 3 digitos; detras esta la gema verde. */
+    public static boolean abrirEscudo(String[] objeto) {
+        recordarMirado('C');
+        if (tieneObjeto("gema verde") || mecanismoActivo) {
+            mostrarEscena("la armadura", "h3_armadura_abierta", "El escudo ya esta abierto y no queda nada detras.");
+            esperarEnter();
+            mensaje = "La armadura ya no guarda nada mas.";
+            return false;
+        }
+        mostrarEscena(objeto[1], objeto[2], objeto[3]);
+        String codigo = leerTexto(centrar("Codigo de 3 digitos (solo ENTER para alejarte): ", ANCHO_ESCENA));
+        System.out.println(bordeEscena());
+        if (codigo.equals(CODIGO_ESCUDO_3)) {
+            Sonido.exito();
+            guardarObjeto("gema verde");
+            mostrarEscena("el escudo abierto", "h3_armadura_abierta",
+                    "CLIC. El escudo se abre y detras brilla la GEMA MISTICA VERDE. La guardas en tu inventario.");
+            esperarEnter();
+            Sonido.recoger();
+            mensaje = "Guardaste la GEMA VERDE en tu inventario.";
+        } else if (codigo.isEmpty()) {
+            mensaje = "Te alejas de la armadura sin intentar nada.";
+        } else {
+            Sonido.error();
+            mensaje = "CODIGO INCORRECTO. El candado del escudo no cede.";
+        }
+        return false;
+    }
+
+    /** El altar: al encajar la gema verde activa el mecanismo que suelta la puerta. */
+    public static boolean usarAltar(String[] objeto) {
+        recordarMirado('A');
+        if (mecanismoActivo) {
+            mostrarEscena("el altar activado", "h3_altar_activo", "La gema brilla en el altar. El mecanismo ya esta activo.");
+            esperarEnter();
+            mensaje = "El altar ya esta activo. Ve a la puerta de salida.";
+        } else if (tieneObjeto("gema verde")) {
+            quitarObjeto("gema verde");
+            mecanismoActivo = true;
+            Sonido.exito();
+            mostrarEscena("el altar activado", "h3_altar_activo",
+                    "Encajas la gema verde en la ranura. El contrapeso baja y se oye un CLANK: el pasador de la puerta quedo libre.");
+            esperarEnter();
+            mensaje = "El altar solto el pasador de la puerta.";
+        } else {
+            abrirEscena(objeto);
+            Sonido.error();
+            mensaje = "La ranura del altar esta vacia. Falta algo que encaje.";
+        }
+        return false;
+    }
+
+    /**
+     * La puerta de la habitacion 3 no tiene teclado: solo se abre cuando el
+     * altar activo el mecanismo. Al ser la ultima puerta, lleva a la victoria.
+     */
+    public static boolean abrirPuertaAltar(String[] objeto) {
+        recordarMirado('P');
+        if (!mecanismoActivo) {
+            abrirEscena(objeto);
+            Sonido.error();
+            mensaje = "El pasador de hierro no se mueve. Algo debe soltarlo...";
+            return false;
+        }
+        Sonido.exito();
+        mostrarEscena("la puerta abierta", "h3_puerta_abierta",
+                "El pasador se retira solo y la puerta se abre con un largo chirrido.");
+        System.out.println(centrar("[ ENTER para cruzar ]", ANCHO_ESCENA));
+        System.out.println(bordeEscena());
+        lector.nextLine();
+        if (tipoJuego == MODO_UNICA || habitacionActual >= TOTAL_HABITACIONES) {
+            mostrarVictoria();
+            return true;
+        }
+        return siguienteHabitacion();
+    }
+
+    /** La pista de la tecla H segun el avance del puzzle de la habitacion 3. */
+    public static String darPistaHabitacion3() {
+        if (mirados.indexOf('E') < 0) {
+            return "PISTA: el esqueleto encadenado sostiene una nota.";
+        }
+        if (!tieneObjeto("pociones de colores") && !balanzaResuelta && !tieneObjeto("gema verde") && !mecanismoActivo) {
+            return "PISTA: la nota da una secuencia de direcciones. Pruebala en el cofre de hierro.";
+        }
+        if (!balanzaResuelta && !tieneObjeto("gema verde") && !mecanismoActivo) {
+            return "PISTA: las pociones se pesan en la balanza del mueble. Sigue el orden de colores de la base.";
+        }
+        if (!tieneObjeto("gema verde") && !mecanismoActivo) {
+            return "PISTA: el escudo de la armadura tiene un candado de 3 digitos. Usa lo que marco la balanza.";
+        }
+        if (!mecanismoActivo) {
+            return "PISTA: la gema verde encaja en la ranura del altar de piedra.";
+        }
+        return "PISTA: el altar solto el pasador. Cruza la puerta de salida.";
+    }
+
+    /** Saca un objeto del inventario (por ejemplo la gema ya encajada en el altar). */
+    public static void quitarObjeto(String nombre) {
+        for (int i = 0; i < totalInventario; i++) {
+            if (inventario[i].equals(nombre)) {
+                for (int j = i; j < totalInventario - 1; j++) {
+                    inventario[j] = inventario[j + 1];
+                }
+                inventario[totalInventario - 1] = null;
+                totalInventario--;
+                return;
+            }
+        }
     }
 
     /** Muestra un texto sin salto de linea y lee la respuesta del jugador (sin espacios). */
@@ -880,7 +1451,7 @@ public class Main {
         String intento = lector.nextLine().trim();
         if (intento.equals(clave)) {
             Sonido.exito();
-            if (habitacionActual >= TOTAL_HABITACIONES) {
+            if (tipoJuego == MODO_UNICA || habitacionActual >= TOTAL_HABITACIONES) {
                 mostrarVictoria();
                 return true;
             }
@@ -890,8 +1461,22 @@ public class Main {
             mensaje = "Te alejas de la puerta sin intentar nada.";
         } else {
             Sonido.error();
-            mensaje = "CLAVE INCORRECTA. El teclado parpadea en silencio.";
-            // TODO equipo: en dificultad DIFICIL limitar los intentos.
+            intentosClave++;
+            if (dificultad == 3) {
+                // DIFICIL: la puerta solo admite MAX_INTENTOS_DIFICIL claves incorrectas.
+                int restantes = MAX_INTENTOS_DIFICIL - intentosClave;
+                if (restantes <= 0) {
+                    derrota = true;
+                    mensajeDerrota = "El teclado se bloquea tras " + MAX_INTENTOS_DIFICIL
+                            + " claves incorrectas. Quedas encerrado para siempre, " + nombreJugador + ".";
+                    mensaje = "TECLADO BLOQUEADO.";
+                } else {
+                    mensaje = "CLAVE INCORRECTA. Te quedan " + restantes
+                            + (restantes == 1 ? " intento." : " intentos.");
+                }
+            } else {
+                mensaje = "CLAVE INCORRECTA. El teclado parpadea en silencio.";
+            }
         }
         return false;
     }
@@ -904,15 +1489,28 @@ public class Main {
         System.out.println();
         imprimirArte("arte/victoria.txt");
         System.out.println();
-        System.out.println(centrar("Escapaste de las " + TOTAL_HABITACIONES
-                + " habitaciones. Eres libre, " + nombreJugador + ".", ANCHO_ESCENA));
+        if (tipoJuego == MODO_UNICA) {
+            System.out.println(centrar("Escapaste de la habitacion " + habitacionActual
+                    + ". Eres libre, " + nombreJugador + ".", ANCHO_ESCENA));
+        } else {
+            System.out.println(centrar("Escapaste de las " + TOTAL_HABITACIONES
+                    + " habitaciones. Eres libre, " + nombreJugador + ".", ANCHO_ESCENA));
+        }
+        System.out.println();
+        // Resumen final de la partida.
+        System.out.println(centrar("Modo: " + NOMBRES_MODO[tipoJuego] + " | Dificultad: "
+                + NOMBRES_DIFICULTAD[dificultad], ANCHO_ESCENA));
+        String resumen = "Movimientos: " + movimientos + " | Pistas usadas: " + pistasUsadas;
+        if (tipoJuego == MODO_CONTRARRELOJ) {
+            resumen = resumen + " | Te sobraron: " + movimientosRestantes;
+        }
+        System.out.println(centrar(resumen, ANCHO_ESCENA));
         System.out.println();
         System.out.println(bordeEscena());
         Sonido.detenerMusica();
         Sonido.victoria();
         System.out.println(centrar("[ ENTER para salir ]", ANCHO_ESCENA));
         lector.nextLine();
-        // TODO equipo: resumen final (movimientos gastados, objetos mirados).
     }
 
     /* ==================== PUZZLE, PISTAS Y SECRETO ==================== */
@@ -954,6 +1552,9 @@ public class Main {
     public static String darPista() {
         if (habitacionActual == 2) {
             return darPistaHabitacion2();
+        }
+        if (habitacionActual == 3) {
+            return darPistaHabitacion3();
         }
         if (mirados.length() == 0) {
             return "PISTA: los objetos guardan secretos. Camina hacia uno y miralo de cerca.";
